@@ -1,10 +1,12 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  SafeAreaView,
+  StatusBar,
 } from 'react-native';
 import {
   RtcSurfaceView,
@@ -34,14 +36,57 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   speakingUsers,
   agoraEngineRef,
 }) => {
+  const [duration, setDuration] = useState<number>(0);
+  const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [isCameraOff, setIsCameraOff] = useState<boolean>(false);
+  const [isSpeakerOn, setIsSpeakerOn] = useState<boolean>(true);
+
   useEffect(() => {
-    // Enable video when component mounts
+    StatusBar.setBarStyle('light-content');
     agoraEngineRef.current?.enableVideo();
+    
+    const timer = setInterval(() => {
+      setDuration(prev => prev + 1);
+    }, 1000);
+
     return () => {
-      // Disable video when component unmounts
       agoraEngineRef.current?.disableVideo();
+      clearInterval(timer);
+      StatusBar.setBarStyle('default');
     };
   }, []);
+
+  const formatDuration = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const remainingSeconds = seconds % 60;
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  const toggleMute = () => {
+    if (agoraEngineRef.current) {
+      setIsMuted(!isMuted);
+      agoraEngineRef.current.muteLocalAudioStream(!isMuted);
+    }
+  };
+
+  const toggleCamera = () => {
+    if (agoraEngineRef.current) {
+      setIsCameraOff(!isCameraOff);
+      agoraEngineRef.current.enableLocalVideo(isCameraOff);
+    }
+  };
+
+  const toggleSpeaker = () => {
+    if (agoraEngineRef.current) {
+      setIsSpeakerOn(!isSpeakerOn);
+      agoraEngineRef.current.setEnableSpeakerphone(!isSpeakerOn);
+    }
+  };
 
   const renderParticipantVideo = (uid: number) => (
     <View key={uid} style={styles.remoteVideo}>
@@ -62,44 +107,90 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerText}>
-          {currentContact ? currentContact.name : channelName}
-        </Text>
-        <Text style={styles.subHeaderText}>
-          {joinedUsers.length} participant{joinedUsers.length !== 1 ? 's' : ''}
-        </Text>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.topBar}>
+        <View style={styles.callInfo}>
+          <Text style={styles.durationText}>{formatDuration(duration)}</Text>
+          <Text style={styles.channelName}>{channelName}</Text>
+        </View>
+        <View style={styles.participantCount}>
+          <Icon name="people" size={20} color="#fff" />
+          <Text style={styles.participantCountText}>{joinedUsers.length + 1}</Text>
+        </View>
       </View>
 
       <View style={styles.videoContainer}>
-        {/* Local video */}
-        <View style={styles.localVideo}>
+        {/* Main video - Show local video when alone, otherwise show remote video */}
+        <View style={styles.mainVideo}>
           <RtcSurfaceView
-            canvas={{ uid: 0 }}
+            canvas={{ uid: joinedUsers.length > 0 ? joinedUsers[0] : 0 }}
             style={styles.videoView}
           />
-          <View style={styles.participantInfo}>
-            <Text style={styles.participantName}>You</Text>
-            {speakingUsers[0] > 0 && <View style={styles.speakingIndicator} />}
-          </View>
+          {joinedUsers.length > 0 && (
+            <View style={styles.participantInfo}>
+              <Text style={styles.participantName}>
+                {joinedUsers[0] === currentContact?.id ? currentContact.name : `Participant ${joinedUsers[0]}`}
+              </Text>
+            </View>
+          )}
         </View>
 
-        {/* Remote videos */}
-        <View style={styles.remoteVideos}>
-          {joinedUsers.map(renderParticipantVideo)}
+        {/* Picture-in-picture video */}
+        {joinedUsers.length > 0 && (
+          <View style={styles.pipVideo}>
+            <RtcSurfaceView
+              canvas={{ uid: 0 }}
+              style={styles.videoView}
+            />
+            <View style={styles.participantInfo}>
+              <Text style={styles.participantName}>You</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Additional participants */}
+        <View style={styles.additionalVideos}>
+          {joinedUsers.slice(1).map(renderParticipantVideo)}
         </View>
       </View>
 
       <View style={styles.controls}>
         <TouchableOpacity
+          style={[styles.controlButton, isMuted && styles.controlButtonActive]}
+          onPress={toggleMute}
+        >
+          <Icon name={isMuted ? "mic-off" : "mic"} size={24} color="#fff" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.controlButton, isCameraOff && styles.controlButtonActive]}
+          onPress={toggleCamera}
+        >
+          <Icon name={isCameraOff ? "videocam-off" : "videocam"} size={24} color="#fff" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={[styles.controlButton, styles.endCallButton]}
           onPress={onEndCall}
         >
-          <Icon name="call-end" size={32} color="#fff" />
+          <Icon name="call-end" size={24} color="#fff" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.controlButton, !isSpeakerOn && styles.controlButtonActive]}
+          onPress={toggleSpeaker}
+        >
+          <Icon name={isSpeakerOn ? "volume-up" : "volume-off"} size={24} color="#fff" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.controlButton}
+          onPress={() => {}}
+        >
+          <Icon name="more-vert" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -108,81 +199,123 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1a1a1a',
   },
-  header: {
-    padding: 60,
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    padding: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  headerText: {
-    fontSize: 24,
-    fontWeight: 'bold',
+  callInfo: {
+    flexDirection: 'column',
+  },
+  durationText: {
     color: '#fff',
+    fontSize: 14,
+    fontFamily: 'monospace',
   },
-  subHeaderText: {
-    fontSize: 16,
-    color: '#ccc',
-    marginTop: 4,
+  channelName: {
+    color: '#fff',
+    fontSize: 12,
+    opacity: 0.7,
+  },
+  participantCount: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    padding: 8,
+    borderRadius: 16,
+  },
+  participantCountText: {
+    color: '#fff',
+    marginLeft: 4,
+    fontSize: 14,
   },
   videoContainer: {
     flex: 1,
-    flexDirection: 'column',
+    position: 'relative',
   },
-  localVideo: {
-    width: Dimensions.get('window').width,
-    height: 200,
-    backgroundColor: '#2c2c2c',
-  },
-  remoteVideos: {
+  mainVideo: {
     flex: 1,
+  },
+  pipVideo: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    width: 100,
+    height: 150,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  additionalVideos: {
+    position: 'absolute',
+    bottom: 100,
+    left: 0,
+    right: 0,
+    height: 100,
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    padding: 8,
   },
   remoteVideo: {
-    width: '50%',
-    height: 200,
-    backgroundColor: '#2c2c2c',
+    width: 120,
+    height: 90,
+    marginRight: 8,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#fff',
   },
   videoView: {
     flex: 1,
   },
-  controls: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  controlButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 10,
-  },
-  endCallButton: {
-    backgroundColor: '#ff4444',
-  },
   participantInfo: {
     position: 'absolute',
-    bottom: 8,
-    left: 8,
-    right: 8,
+    bottom: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     padding: 8,
-    borderRadius: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   participantName: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
   },
+  controls: {
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  controlButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  controlButtonActive: {
+    backgroundColor: '#d32f2f',
+  },
+  endCallButton: {
+    backgroundColor: '#ff4444',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
   speakingIndicator: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: '#4CAF50',
+    marginLeft: 4,
   },
 });
 

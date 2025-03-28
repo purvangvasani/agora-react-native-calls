@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -7,12 +7,14 @@ import {
     Dimensions,
     SafeAreaView,
     Animated,
+    StatusBar,
 } from 'react-native';
 import { IRtcEngine } from 'react-native-agora';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
 interface CallScreenProps {
-    currentContact?: {
+    currentContact: {
+        id: number;
         name: string;
         phone: string;
     } | null;
@@ -29,83 +31,147 @@ const CallScreen: React.FC<CallScreenProps> = ({
     onEndCall,
     channelName,
     speakingUsers,
-    agoraEngineRef
+    agoraEngineRef,
 }) => {
-    // In CallScreen.tsx
+    const [duration, setDuration] = useState<number>(0);
+    const [isMuted, setIsMuted] = useState<boolean>(false);
+    const [isSpeakerOn, setIsSpeakerOn] = useState<boolean>(true);
+    const [pulseAnim] = useState(new Animated.Value(1));
+
     useEffect(() => {
-        const agoraEngine = agoraEngineRef.current;
-        if (agoraEngine) {
-            agoraEngine.muteLocalAudioStream(false);
-            agoraEngine.muteAllRemoteAudioStreams(false);
-            agoraEngine.setEnableSpeakerphone(true);
-        }
+        StatusBar.setBarStyle('light-content');
+        const timer = setInterval(() => {
+            setDuration(prev => prev + 1);
+        }, 1000);
+
+        // Start pulse animation for speaking indicator
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulseAnim, {
+                    toValue: 1.2,
+                    duration: 1000,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(pulseAnim, {
+                    toValue: 1,
+                    duration: 1000,
+                    useNativeDriver: true,
+                }),
+            ])
+        ).start();
+
+        return () => {
+            clearInterval(timer);
+            StatusBar.setBarStyle('default');
+        };
     }, []);
 
-    const getVolumeIndicatorStyle = (volume: number) => {
-        // Convert volume (0-255) to opacity (0.2-1)
-        const opacity = 0.2 + (volume / 255) * 0.8;
-        return {
-            ...styles.speakingIndicator,
-            opacity,
-        };
+    const formatDuration = (seconds: number): string => {
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const remainingSeconds = seconds % 60;
+
+        if (hours > 0) {
+            return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+        return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
     };
+
+    const toggleMute = () => {
+        if (agoraEngineRef.current) {
+            setIsMuted(!isMuted);
+            agoraEngineRef.current.muteLocalAudioStream(!isMuted);
+        }
+    };
+
+    const toggleSpeaker = () => {
+        if (agoraEngineRef.current) {
+            setIsSpeakerOn(!isSpeakerOn);
+            agoraEngineRef.current.setEnableSpeakerphone(!isSpeakerOn);
+        }
+    };
+
+    const renderParticipant = (uid: number) => (
+        <View key={uid} style={styles.participantItem}>
+            <View style={styles.participantAvatar}>
+                <Text style={styles.avatarText}>
+                    {(uid === currentContact?.id ? currentContact.name : `User ${uid}`).charAt(0)}
+                </Text>
+                {speakingUsers[uid] > 0 && (
+                    <Animated.View 
+                        style={[
+                            styles.speakingRing,
+                            { transform: [{ scale: pulseAnim }] }
+                        ]} 
+                    />
+                )}
+            </View>
+            <Text style={styles.participantName}>
+                {uid === currentContact?.id ? currentContact.name : `User ${uid}`}
+            </Text>
+            {speakingUsers[uid] > 0 && <View style={styles.speakingIndicator} />}
+        </View>
+    );
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.content}>
-                {/* Call Status */}
-                <View style={styles.statusContainer}>
-                    <Icon name="phone-in-talk" size={40} color="#4CAF50" />
-                    <Text style={styles.statusText}>
-                        {!currentContact ? 'On Call' : 'Connected'}
-                    </Text>
-                    <Text style={styles.channelText}>Channel: {channelName}</Text>
+            <View style={styles.topBar}>
+                <View style={styles.callInfo}>
+                    <Text style={styles.durationText}>{formatDuration(duration)}</Text>
+                    <Text style={styles.channelName}>{channelName}</Text>
                 </View>
+                <View style={styles.participantCount}>
+                    <Icon name="people" size={20} color="#fff" />
+                    <Text style={styles.participantCountText}>{joinedUsers.length + 1}</Text>
+                </View>
+            </View>
 
-                {/* Contact Info */}
-                <View style={styles.contactContainer}>
-                    <View style={styles.avatarContainer}>
-                        <Icon name="account-circle" size={100} color="#666" />
-                        {speakingUsers[joinedUsers[0]] > 0 && (
-                            <View style={getVolumeIndicatorStyle(speakingUsers[joinedUsers[0]])} />
+            <View style={styles.content}>
+                <View style={styles.mainParticipant}>
+                    <View style={styles.mainAvatar}>
+                        <Text style={styles.mainAvatarText}>
+                            {currentContact?.name?.charAt(0) || channelName.charAt(0)}
+                        </Text>
+                        {speakingUsers[currentContact?.id || 0] > 0 && (
+                            <Animated.View 
+                                style={[
+                                    styles.mainSpeakingRing,
+                                    { transform: [{ scale: pulseAnim }] }
+                                ]} 
+                            />
                         )}
                     </View>
-                    {currentContact ? (
-                        <>
-                            <Text style={styles.nameText}>{currentContact.name}</Text>
-                            <Text style={styles.phoneText}>{currentContact.phone}</Text>
-                        </>
-                    ) : (
-                        <>
-                            <Text style={styles.nameText}>Group Call</Text>
-                            <Text style={styles.participantsText}>
-                                {joinedUsers.length} participant{joinedUsers.length !== 1 ? 's' : ''}
-                            </Text>
-                            <View style={styles.participantsContainer}>
-                                {joinedUsers.map((uid) => (
-                                    <View key={uid} style={styles.participantItem}>
-                                        <Icon name="person" size={24} color="#666" />
-                                        {speakingUsers[uid] > 0 && (
-                                            <View style={getVolumeIndicatorStyle(speakingUsers[uid])} />
-                                        )}
-                                        <Text style={styles.participantText}>User {uid}</Text>
-                                    </View>
-                                ))}
-                            </View>
-                        </>
-                    )}
+                    <Text style={styles.mainName}>
+                        {currentContact?.name || channelName}
+                    </Text>
                 </View>
 
-                {/* Call Controls */}
-                <View style={styles.controlsContainer}>
-                    <TouchableOpacity
-                        style={styles.endCallButton}
-                        onPress={onEndCall}
-                        activeOpacity={0.7}
-                    >
-                        <Icon name="call-end" size={36} color="#fff" />
-                    </TouchableOpacity>
+                <View style={styles.participantsList}>
+                    {joinedUsers.map(renderParticipant)}
                 </View>
+            </View>
+
+            <View style={styles.controls}>
+                <TouchableOpacity
+                    style={[styles.controlButton, isMuted && styles.controlButtonActive]}
+                    onPress={toggleMute}
+                >
+                    <Icon name={isMuted ? "mic-off" : "mic"} size={24} color="#fff" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.controlButton, styles.endCallButton]}
+                    onPress={onEndCall}
+                >
+                    <Icon name="call-end" size={24} color="#fff" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={[styles.controlButton, !isSpeakerOn && styles.controlButtonActive]}
+                    onPress={toggleSpeaker}
+                >
+                    <Icon name={isSpeakerOn ? "volume-up" : "volume-off"} size={24} color="#fff" />
+                </TouchableOpacity>
             </View>
         </SafeAreaView>
     );
@@ -114,115 +180,149 @@ const CallScreen: React.FC<CallScreenProps> = ({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f8f9fa',
+        backgroundColor: '#1a1a1a',
+    },
+    topBar: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 16,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    callInfo: {
+        flexDirection: 'column',
+    },
+    durationText: {
+        color: '#fff',
+        fontSize: 14,
+        fontFamily: 'monospace',
+    },
+    channelName: {
+        color: '#fff',
+        fontSize: 12,
+        opacity: 0.7,
+    },
+    participantCount: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.3)',
+        padding: 8,
+        borderRadius: 16,
+    },
+    participantCountText: {
+        color: '#fff',
+        marginLeft: 4,
+        fontSize: 14,
     },
     content: {
         flex: 1,
-        justifyContent: 'space-between',
-        padding: 20,
-    },
-    statusContainer: {
         alignItems: 'center',
-        marginTop: 40,
+        paddingTop: 40,
     },
-    statusText: {
-        fontSize: 18,
-        color: '#4CAF50',
-        marginTop: 10,
-        fontWeight: '600',
-    },
-    channelText: {
-        fontSize: 14,
-        color: '#666',
-        marginTop: 5,
-    },
-    contactContainer: {
+    mainParticipant: {
         alignItems: 'center',
+        marginBottom: 40,
     },
-    avatarContainer: {
+    mainAvatar: {
         width: 120,
         height: 120,
         borderRadius: 60,
-        backgroundColor: '#e1e2e3',
+        backgroundColor: '#075e54',
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 20,
-        position: 'relative',
+        marginBottom: 16,
     },
-    nameText: {
-        fontSize: 24,
+    mainAvatarText: {
+        fontSize: 48,
+        color: '#fff',
         fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 8,
     },
-    phoneText: {
-        fontSize: 16,
-        color: '#666',
+    mainName: {
+        fontSize: 24,
+        color: '#fff',
+        fontWeight: 'bold',
     },
-    participantsText: {
-        fontSize: 16,
-        color: '#666',
-        marginTop: 5,
+    mainSpeakingRing: {
+        position: 'absolute',
+        top: -4,
+        left: -4,
+        right: -4,
+        bottom: -4,
+        borderRadius: 64,
+        borderWidth: 2,
+        borderColor: '#4CAF50',
     },
-    participantsContainer: {
-        marginTop: 20,
+    participantsList: {
         width: '100%',
-        paddingHorizontal: 20,
+        paddingHorizontal: 16,
     },
     participantItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#fff',
-        padding: 10,
-        borderRadius: 10,
-        marginBottom: 10,
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 1,
-        },
-        shadowOpacity: 0.2,
-        shadowRadius: 1.41,
-        elevation: 2,
-        position: 'relative',
+        padding: 12,
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        borderRadius: 8,
+        marginBottom: 8,
     },
-    participantText: {
-        marginLeft: 10,
-        fontSize: 16,
-        color: '#333',
-    },
-    controlsContainer: {
-        flexDirection: 'row',
+    participantAvatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#075e54',
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 40,
+        marginRight: 12,
+    },
+    avatarText: {
+        fontSize: 18,
+        color: '#fff',
+        fontWeight: 'bold',
+    },
+    participantName: {
+        flex: 1,
+        fontSize: 16,
+        color: '#fff',
+    },
+    speakingIndicator: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#4CAF50',
+        marginLeft: 8,
+    },
+    speakingRing: {
+        position: 'absolute',
+        top: -2,
+        left: -2,
+        right: -2,
+        bottom: -2,
+        borderRadius: 22,
+        borderWidth: 2,
+        borderColor: '#4CAF50',
+    },
+    controls: {
+        flexDirection: 'row',
+        justifyContent: 'space-evenly',
+        alignItems: 'center',
+        padding: 20,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    controlButton: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    },
+    controlButtonActive: {
+        backgroundColor: '#d32f2f',
     },
     endCallButton: {
         backgroundColor: '#ff4444',
-        width: 70,
-        height: 70,
-        borderRadius: 35,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 2,
-        },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
-    },
-    speakingIndicator: {
-        position: 'absolute',
-        top: -5,
-        right: -5,
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        backgroundColor: '#4CAF50',
-        borderWidth: 2,
-        borderColor: '#fff',
+        width: 60,
+        height: 60,
+        borderRadius: 30,
     },
 });
 
