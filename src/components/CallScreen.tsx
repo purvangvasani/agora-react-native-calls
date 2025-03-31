@@ -4,20 +4,16 @@ import {
     Text,
     StyleSheet,
     TouchableOpacity,
-    Dimensions,
     SafeAreaView,
     Animated,
     StatusBar,
 } from 'react-native';
 import { IRtcEngine } from 'react-native-agora';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { Contact } from '../types';
 
 interface CallScreenProps {
-    currentContact: {
-        id: number;
-        name: string;
-        phone: string;
-    } | null;
+    currentContact: Contact | null;
     joinedUsers: number[];
     onEndCall: () => void;
     channelName: string;
@@ -31,7 +27,7 @@ const CallScreen: React.FC<CallScreenProps> = ({
     onEndCall,
     channelName,
     speakingUsers,
-    agoraEngineRef,
+    agoraEngineRef
 }) => {
     const [duration, setDuration] = useState<number>(0);
     const [isMuted, setIsMuted] = useState<boolean>(false);
@@ -98,11 +94,11 @@ const CallScreen: React.FC<CallScreenProps> = ({
                     {(uid === currentContact?.id ? currentContact.name : `User ${uid}`).charAt(0)}
                 </Text>
                 {speakingUsers[uid] > 0 && (
-                    <Animated.View 
+                    <Animated.View
                         style={[
                             styles.speakingRing,
                             { transform: [{ scale: pulseAnim }] }
-                        ]} 
+                        ]}
                     />
                 )}
             </View>
@@ -133,11 +129,11 @@ const CallScreen: React.FC<CallScreenProps> = ({
                             {currentContact?.name?.charAt(0) || channelName.charAt(0)}
                         </Text>
                         {speakingUsers[currentContact?.id || 0] > 0 && (
-                            <Animated.View 
+                            <Animated.View
                                 style={[
                                     styles.mainSpeakingRing,
                                     { transform: [{ scale: pulseAnim }] }
-                                ]} 
+                                ]}
                             />
                         )}
                     </View>

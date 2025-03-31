@@ -7,6 +7,7 @@ import {
   Dimensions,
   SafeAreaView,
   StatusBar,
+  ScrollView,
 } from 'react-native';
 import {
   RtcSurfaceView,
@@ -14,13 +15,10 @@ import {
   IRtcEngine,
 } from 'react-native-agora';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { Contact } from '../types';
 
 interface VideoCallScreenProps {
-  currentContact: {
-    id: number;
-    name: string;
-    phone: string;
-  } | null;
+  currentContact: Contact | null;
   joinedUsers: number[];
   onEndCall: () => void;
   channelName: string;
@@ -34,7 +32,7 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   onEndCall,
   channelName,
   speakingUsers,
-  agoraEngineRef,
+  agoraEngineRef
 }) => {
   const [duration, setDuration] = useState<number>(0);
   const [isMuted, setIsMuted] = useState<boolean>(false);
@@ -93,7 +91,7 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       <RtcSurfaceView
         canvas={{
           uid,
-          renderMode: 1,
+          renderMode: RenderModeType.RenderModeFit,
         }}
         style={styles.videoView}
       />
