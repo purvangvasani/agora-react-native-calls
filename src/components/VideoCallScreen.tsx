@@ -16,24 +16,20 @@ import {
 } from 'react-native-agora';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Contact } from '../types';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RouteProp } from '@react-navigation/native';
+import { RootStackParamList } from '../navigation/AppNavigator';
+
+type VideoCallScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'VideoCall'>;
+type VideoCallScreenRouteProp = RouteProp<RootStackParamList, 'VideoCall'>;
 
 interface VideoCallScreenProps {
-  currentContact: Contact | null;
-  joinedUsers: number[];
-  onEndCall: () => void;
-  channelName: string;
-  speakingUsers: { [key: number]: number };
-  agoraEngineRef: React.RefObject<IRtcEngine>;
+  navigation: VideoCallScreenNavigationProp;
+  route: VideoCallScreenRouteProp;
 }
 
-const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
-  currentContact,
-  joinedUsers,
-  onEndCall,
-  channelName,
-  speakingUsers,
-  agoraEngineRef
-}) => {
+const VideoCallScreen: React.FC<VideoCallScreenProps> = ({ navigation, route }) => {
+  const { currentContact, channelName, currentUser, agoraEngineRef } = route.params;
   const [duration, setDuration] = useState<number>(0);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isCameraOff, setIsCameraOff] = useState<boolean>(false);
@@ -51,8 +47,40 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
       agoraEngineRef.current?.disableVideo();
       clearInterval(timer);
       StatusBar.setBarStyle('default');
+      handleEndCall();
     };
   }, []);
+
+  const handleEndCall = async () => {
+    try {
+      await fetch('http://localhost:3000/api/calls/end', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contactId: currentContact.id,
+          channelName,
+          isVoiceCall: false,
+          isVideoCall: false,
+          endTime: new Date().toISOString(),
+          callerId: currentUser.id,
+        }),
+      });
+
+      const agoraEngine = agoraEngineRef.current;
+      if (agoraEngine) {
+        agoraEngine.stopPreview();
+        agoraEngine.disableVideo();
+        await agoraEngine.leaveChannel();
+      }
+
+      navigation.goBack();
+    } catch (err) {
+      console.error('Error ending video call:', err);
+      navigation.goBack();
+    }
+  };
 
   const formatDuration = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
@@ -99,7 +127,7 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
         <Text style={styles.participantName}>
           {uid === currentContact?.id ? currentContact.name : `Participant ${uid}`}
         </Text>
-        {speakingUsers[uid] > 0 && <View style={styles.speakingIndicator} />}
+        {/* {speakingUsers[uid] > 0 && <View style={styles.speakingIndicator} />} */}
       </View>
     </View>
   );
@@ -111,16 +139,16 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
           <Text style={styles.durationText}>{formatDuration(duration)}</Text>
           <Text style={styles.channelName}>{channelName}</Text>
         </View>
-        <View style={styles.participantCount}>
+        {/* <View style={styles.participantCount}>
           <Icon name="people" size={20} color="#fff" />
           <Text style={styles.participantCountText}>{joinedUsers.length + 1}</Text>
-        </View>
+        </View> */}
       </View>
 
       <View style={styles.videoContainer}>
         {/* Main video - Show local video when alone, otherwise show remote video */}
         <View style={styles.mainVideo}>
-          <RtcSurfaceView
+          {/* <RtcSurfaceView
             canvas={{ uid: joinedUsers.length > 0 ? joinedUsers[0] : 0 }}
             style={styles.videoView}
           />
@@ -130,11 +158,11 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
                 {joinedUsers[0] === currentContact?.id ? currentContact.name : `Participant ${joinedUsers[0]}`}
               </Text>
             </View>
-          )}
+          )} */}
         </View>
 
         {/* Picture-in-picture video */}
-        {joinedUsers.length > 0 && (
+        {/* {joinedUsers.length > 0 && (
           <View style={styles.pipVideo}>
             <RtcSurfaceView
               canvas={{ uid: 0 }}
@@ -144,12 +172,12 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
               <Text style={styles.participantName}>You</Text>
             </View>
           </View>
-        )}
+        )} */}
 
         {/* Additional participants */}
-        <View style={styles.additionalVideos}>
+        {/* <View style={styles.additionalVideos}>
           {joinedUsers.slice(1).map(renderParticipantVideo)}
-        </View>
+        </View> */}
       </View>
 
       <View style={styles.controls}>
@@ -169,7 +197,7 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
 
         <TouchableOpacity
           style={[styles.controlButton, styles.endCallButton]}
-          onPress={onEndCall}
+          onPress={handleEndCall}
         >
           <Icon name="call-end" size={24} color="#fff" />
         </TouchableOpacity>

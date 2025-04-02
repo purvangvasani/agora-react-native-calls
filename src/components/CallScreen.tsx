@@ -11,24 +11,20 @@ import {
 import { IRtcEngine } from 'react-native-agora';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Contact } from '../types';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RouteProp } from '@react-navigation/native';
+import { RootStackParamList } from '../navigation/AppNavigator';
+
+type CallScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Call'>;
+type CallScreenRouteProp = RouteProp<RootStackParamList, 'Call'>;
 
 interface CallScreenProps {
-    currentContact: Contact | null;
-    joinedUsers: number[];
-    onEndCall: () => void;
-    channelName: string;
-    speakingUsers: { [key: number]: number };
-    agoraEngineRef: React.RefObject<IRtcEngine>;
+    navigation: CallScreenNavigationProp;
+    route: CallScreenRouteProp;
 }
 
-const CallScreen: React.FC<CallScreenProps> = ({
-    currentContact,
-    joinedUsers,
-    onEndCall,
-    channelName,
-    speakingUsers,
-    agoraEngineRef
-}) => {
+const CallScreen: React.FC<CallScreenProps> = ({ navigation, route }) => {
+    const { currentContact, channelName, currentUser, agoraEngineRef } = route.params;
     const [duration, setDuration] = useState<number>(0);
     const [isMuted, setIsMuted] = useState<boolean>(false);
     const [isSpeakerOn, setIsSpeakerOn] = useState<boolean>(true);
@@ -59,8 +55,41 @@ const CallScreen: React.FC<CallScreenProps> = ({
         return () => {
             clearInterval(timer);
             StatusBar.setBarStyle('default');
+            handleEndCall();
         };
     }, []);
+
+    const handleEndCall = async () => {
+        try {
+            // Make API call to log call end
+            await fetch('http://localhost:3000/api/calls/end', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    contactId: currentContact.id,
+                    channelName,
+                    isVoiceCall: false,
+                    isVideoCall: false,
+                    endTime: new Date().toISOString(),
+                    callerId: currentUser.id,
+                }),
+            });
+
+            // Clean up Agora engine
+            const agoraEngine = agoraEngineRef.current;
+            if (agoraEngine) {
+                await agoraEngine.leaveChannel();
+            }
+
+            // Navigate back
+            navigation.goBack();
+        } catch (err) {
+            console.error('Error ending call:', err);
+            navigation.goBack(); // Still navigate back even if API call fails
+        }
+    };
 
     const formatDuration = (seconds: number): string => {
         const hours = Math.floor(seconds / 3600);
@@ -93,19 +122,19 @@ const CallScreen: React.FC<CallScreenProps> = ({
                 <Text style={styles.avatarText}>
                     {(uid === currentContact?.id ? currentContact.name : `User ${uid}`).charAt(0)}
                 </Text>
-                {speakingUsers[uid] > 0 && (
+                {/* {speakingUsers[uid] > 0 && (
                     <Animated.View
                         style={[
                             styles.speakingRing,
                             { transform: [{ scale: pulseAnim }] }
                         ]}
                     />
-                )}
+                )} */}
             </View>
             <Text style={styles.participantName}>
                 {uid === currentContact?.id ? currentContact.name : `User ${uid}`}
             </Text>
-            {speakingUsers[uid] > 0 && <View style={styles.speakingIndicator} />}
+            {/* {speakingUsers[uid] > 0 && <View style={styles.speakingIndicator} />} */}
         </View>
     );
 
@@ -116,10 +145,10 @@ const CallScreen: React.FC<CallScreenProps> = ({
                     <Text style={styles.durationText}>{formatDuration(duration)}</Text>
                     <Text style={styles.channelName}>{channelName}</Text>
                 </View>
-                <View style={styles.participantCount}>
+                {/* <View style={styles.participantCount}>
                     <Icon name="people" size={20} color="#fff" />
                     <Text style={styles.participantCountText}>{joinedUsers.length + 1}</Text>
-                </View>
+                </View> */}
             </View>
 
             <View style={styles.content}>
@@ -128,23 +157,23 @@ const CallScreen: React.FC<CallScreenProps> = ({
                         <Text style={styles.mainAvatarText}>
                             {currentContact?.name?.charAt(0) || channelName.charAt(0)}
                         </Text>
-                        {speakingUsers[currentContact?.id || 0] > 0 && (
+                        {/* {speakingUsers[currentContact?.id || 0] > 0 && (
                             <Animated.View
                                 style={[
                                     styles.mainSpeakingRing,
                                     { transform: [{ scale: pulseAnim }] }
                                 ]}
                             />
-                        )}
+                        )} */}
                     </View>
                     <Text style={styles.mainName}>
                         {currentContact?.name || channelName}
                     </Text>
                 </View>
 
-                <View style={styles.participantsList}>
+                {/* <View style={styles.participantsList}>
                     {joinedUsers.map(renderParticipant)}
-                </View>
+                </View> */}
             </View>
 
             <View style={styles.controls}>
@@ -157,7 +186,7 @@ const CallScreen: React.FC<CallScreenProps> = ({
 
                 <TouchableOpacity
                     style={[styles.controlButton, styles.endCallButton]}
-                    onPress={onEndCall}
+                    onPress={handleEndCall}
                 >
                     <Icon name="call-end" size={24} color="#fff" />
                 </TouchableOpacity>
