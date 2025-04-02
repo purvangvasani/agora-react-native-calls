@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   SafeAreaView,
   View,
@@ -11,6 +11,8 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { IRtcEngine } from 'react-native-agora';
 import { Contact } from '../types';
+import io from 'socket.io-client';
+const socket = io("http://localhost:3000");
 
 interface HomeScreenProps {
   channelName: string;
@@ -35,6 +37,100 @@ const HomeScreen: React.FC<HomeScreenProps> = ({
   joinCall,
   isCalling,
 }) => {
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    socket.on("receive_message", (data) => {
+      console.log(data);
+    });
+    const fetchContacts = async () => {
+      try {
+        const response = await fetch('http://localhost:3000/api/users');
+        if (!response.ok) {
+          throw new Error('Failed to fetch contacts');
+        }
+        const data = await response.json();
+        setContacts(data);
+        setError(null);
+      } catch (err) {
+        setError('Error fetching contacts');
+        console.error('Error fetching contacts:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchContacts();
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  const handleCallAction = async (
+    contact: Contact,
+    actionType: 'start' | 'join',
+    isVideo: boolean
+  ) => {
+    try {
+      const response = await fetch('http://localhost:3000/api/calls', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: contact.id,
+          name: contact.name,
+          number: contact?.number || contact.phone,
+          actionType: actionType,
+          isVideoCall: isVideo,
+          isVoiceCall: !isVideo,
+          channelName: channelName,
+          timestamp: new Date().toISOString(),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to log call action');
+      }
+
+      // After successful API call, proceed with the actual call
+      if (actionType === 'start') {
+        if (isVideo) {
+          startVideoCall(contact);
+        } else {
+          startCall(contact);
+          // socket.emit("send_message", {
+          //   message: "Hello, how are you?",
+          //   senderId: 1,
+          //   receiverId: contact.id,
+          // });
+        }
+      } else {
+        joinCall(contact);
+      }
+    } catch (err) {
+      console.error('Error logging call action:', err);
+      // Still proceed with the call even if logging fails
+      if (actionType === 'start') {
+        if (isVideo) {
+          startVideoCall(contact);
+        } else {
+          startCall(contact);
+          // socket.emit("send_message", {
+          //   message: "Hello, how are you?",
+          //   senderId: 1,
+          //   receiverId: contact.id,
+          // });
+        }
+      } else {
+        joinCall(contact);
+      }
+    }
+  };
+
   const renderContact = ({ item }: { item: Contact }) => (
     <View style={styles.contactItem}>
       <View style={styles.contactInfo}>
@@ -48,7 +144,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({
             agoraEngineRef.current?.enableLocalAudio(true);
             agoraEngineRef.current?.muteLocalAudioStream(false);
             agoraEngineRef.current?.muteAllRemoteAudioStreams(false);
-            startCall(item);
+            // socket.emit("send_message", {
+            //   message: "Hello, how are you?",
+            //   senderId: 1,
+            //   receiverId: item.id,
+            // });
+            handleCallAction(item, 'start', false);
           }}
           disabled={isCalling}
           style={[styles.callButton, styles.audioCallButton]}
@@ -56,7 +157,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({
           <Icon name="call" size={24} color={isCalling ? '#888' : '#075e54'} />
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => startVideoCall(item)}
+          onPress={() => handleCallAction(item, 'start', true)}
           disabled={isCalling}
           style={[styles.callButton, styles.videoCallButton]}
         >
@@ -101,12 +202,22 @@ const HomeScreen: React.FC<HomeScreenProps> = ({
         </View>
       </View>
       <Text style={styles.header}>Contacts</Text>
-      <FlatList
-        data={dummyContacts}
-        renderItem={renderContact}
-        keyExtractor={(item: Contact) => item.id.toString()}
-        style={styles.list}
-      />
+      {loading ? (
+        <View style={styles.centerContent}>
+          <Text>Loading contacts...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.centerContent}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={contacts}
+          renderItem={renderContact}
+          keyExtractor={(item: Contact) => item.id.toString()}
+          style={styles.list}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -192,6 +303,15 @@ const styles = StyleSheet.create({
   },
   videoJoinButton: {
     backgroundColor: '#e3f2fd',
+  },
+  centerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    color: 'red',
+    fontSize: 16,
   },
 });
 

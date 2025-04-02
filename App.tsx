@@ -29,7 +29,7 @@ import HomeScreen from './src/screens/HomeScreen';
 
 // Replace process.env variables with direct values
 const APP_ID = '9ea47ffa5d624be09aa43318b934a590';
-const APP_TOKEN = '007eJxTYFg+V7ci/pjxMzvH/plpBZr3dl9+XlhfKVOxUL795eo5khkKDJapiSbmaWmJpilmRiZJqQaWiYkmxsaGFkmWxiaJppYGM1VfpTcEMjK0rZvCxMgAgSA+O0NJanFJZl46AwMA7Aghng==';
+const APP_TOKEN = '007eJxTYLC+cHvP00dn7m07e/PUk/TNzD0sjKlvw3ba5XfwG/p/ezxDgcEyNdHEPC0t0TTFzMgkKdXAMjHRxNjY0CLJ0tgk0dTS4NuLN+kNgYwMvwotGRkZIBDEZ2coSS0uycxLZ2AAAPH2JOc=';
 const DEFAULT_CHANNEL_NAME = 'testing';
 
 const App: React.FC = () => {
@@ -93,7 +93,7 @@ const App: React.FC = () => {
 
       agoraEngineRef.current = createAgoraRtcEngine();
       const agoraEngine = agoraEngineRef.current;
-      
+
       agoraEngine.initialize({
         appId: APP_ID || '',
       });
@@ -170,7 +170,7 @@ const App: React.FC = () => {
       const agoraEngine = agoraEngineRef.current;
       if (agoraEngine && channelName) {
         setCurrentContact(contact);
-        
+
         agoraEngine.setChannelProfile(ChannelProfileType.ChannelProfileCommunication);
         agoraEngine.enableAudio();
         agoraEngine.enableLocalAudio(true);
@@ -222,19 +222,19 @@ const App: React.FC = () => {
       setIsVideoCall(true);
 
       agoraEngine.setChannelProfile(ChannelProfileType.ChannelProfileCommunication);
-      
+
       // Enable video before joining
       agoraEngine.enableVideo();
       agoraEngine.enableLocalVideo(true);
       agoraEngine.startPreview();
-      
+
       await agoraEngine.joinChannel(
-          APP_TOKEN,
-          channelName,
-          contact.id,
-          {
-            clientRoleType: ClientRoleType.ClientRoleBroadcaster,
-          }
+        APP_TOKEN,
+        channelName,
+        contact.id,
+        {
+          clientRoleType: ClientRoleType.ClientRoleBroadcaster,
+        }
       );
     } catch (e) {
       console.log('Video call error:', e);
@@ -248,12 +248,36 @@ const App: React.FC = () => {
       const agoraEngine = agoraEngineRef.current;
       if (!agoraEngine) return;
 
-      if (isVideoCall) {
-        agoraEngine.stopPreview();
-        agoraEngine.disableVideo();
+      // Make API call to update call status
+      try {
+        const response = await fetch('http://localhost:3000/api/calls/end', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            id: currentContact?.id,
+            name: currentContact?.name,
+            number: currentContact?.number || currentContact?.phone,
+            channelName: channelName,
+            isVideoCall: false,
+            isVoiceCall: false,
+            endTime: new Date().toISOString(),
+          }),
+        });
+
+        if (!response.ok) {
+          console.error('Failed to log call end');
+        }
+      } catch (err) {
+        console.error('Error logging call end:', err);
       }
+
+      // Proceed with ending the call regardless of API success
+      agoraEngine.stopPreview();
+      agoraEngine.disableVideo();
       await agoraEngine.leaveChannel();
-      
+
       setIsCalling(false);
       setIsVideoCall(false);
       setCurrentContact(null);
@@ -263,6 +287,27 @@ const App: React.FC = () => {
       console.log('End call error:', e);
     }
   };
+
+  // const endCall = async (): Promise<void> => {
+  //   try {
+  //     const agoraEngine = agoraEngineRef.current;
+  //     if (!agoraEngine) return;
+
+  //     if (isVideoCall) {
+  //       agoraEngine.stopPreview();
+  //       agoraEngine.disableVideo();
+  //     }
+  //     await agoraEngine.leaveChannel();
+
+  //     setIsCalling(false);
+  //     setIsVideoCall(false);
+  //     setCurrentContact(null);
+  //     setUserJoined(false);
+  //     setJoinedUsers([]);
+  //   } catch (e) {
+  //     console.log('End call error:', e);
+  //   }
+  // };
 
   if (isCalling) {
     if (isVideoCall) {
