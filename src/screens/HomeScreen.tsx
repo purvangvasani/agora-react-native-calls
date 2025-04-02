@@ -32,11 +32,43 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, route }) => {
   const [error, setError] = useState<string | null>(null);
   const [channelName, setChannelName] = useState<string>('testing');
   const [isCalling, setIsCalling] = useState(false);
+  const socket = io('http://192.168.69.69:3000'); // Replace with your server URL
+  useEffect(() => {
+
+    socket.on('connect', () => {
+      console.log('Connected to WebSocket server');
+    });
+
+    socket.on('incomingCall', (caller: Contact) => {
+      console.log('Incoming call from:', caller);
+      // Alert.alert('Incoming call', `${caller.callerName} is calling you`);
+      // navigation.navigate('IncomingCall', { caller });
+    });
+
+    socket.on('incomingCall123', (data: any) => {
+      console.log('Incoming call 123 from:', data, currentUser);
+      const {receiver, caller, channelName, agoraEngineRef, isVoiceCall, isVideoCall} = data;
+      if(receiver.id === currentUser.id){
+        // Alert.alert('Incoming call 123', `${receiver.name} is calling you`);
+        navigation.navigate('IncomingCall', { caller: receiver, channelName, currentUser: caller, agoraEngineRef, isVoiceCall, isVideoCall });
+      }
+    });
+
+    socket.emit('send_message', 'Hello from client');
+
+    socket.on('disconnect', () => {
+      console.log('Disconnected from WebSocket server');
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [navigation]);
 
   useEffect(() => {
     const fetchContacts = async () => {
       try {
-        const response = await fetch('http://localhost:3000/api/users');
+        const response = await fetch('http://192.168.69.69:3000/api/users');
         if (!response.ok) {
           throw new Error('Failed to fetch contacts');
         }
@@ -102,7 +134,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, route }) => {
         agoraEngineRef.current?.muteAllRemoteAudioStreams(false);
       }
 
-      const response = await fetch('http://localhost:3000/api/calls', {
+      const response = await fetch('http://192.168.69.69:3000/api/calls', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -118,6 +150,9 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, route }) => {
           timestamp: new Date().toISOString(),
           callerId: currentUser.id,
           callerName: currentUser.name,
+          currentContact: contact,
+          currentUser,
+          agoraEngineRef,
         }),
       });
 
@@ -135,6 +170,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, route }) => {
           // onEndCall: () => navigation.goBack(),
         });
       } else {
+        socket.emit('send_message', {contact, channelName, currentUser, agoraEngineRef});
         navigation.navigate('Call', {
           currentContact: contact,
           channelName,
@@ -190,7 +226,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, route }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.inputContainer}>
+      {/* <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
           placeholder="Enter Channel Name"
@@ -221,7 +257,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, route }) => {
             <Text style={styles.joinButtonText}>Join Video</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </View> */}
       <Text style={styles.header}>Contacts</Text>
       {loading ? (
         <View style={styles.centerContent}>
@@ -264,8 +300,8 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     padding: 16,
-    backgroundColor: '#075e54',
-    color: 'white',
+    backgroundColor: '#ffffff',
+    color: '#075e54',
   },
   list: {
     flex: 1,

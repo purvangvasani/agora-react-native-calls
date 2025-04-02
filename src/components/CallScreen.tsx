@@ -62,7 +62,7 @@ const CallScreen: React.FC<CallScreenProps> = ({ navigation, route }) => {
     const handleEndCall = async () => {
         try {
             // Make API call to log call end
-            await fetch('http://localhost:3000/api/calls/end', {
+            await fetch('http://192.168.69.69:3000/api/calls/end', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -84,10 +84,16 @@ const CallScreen: React.FC<CallScreenProps> = ({ navigation, route }) => {
             }
 
             // Navigate back
-            navigation.goBack();
+            navigation.replace('Home', {
+                currentUser: currentUser,
+                agoraEngineRef: agoraEngineRef
+            });
         } catch (err) {
             console.error('Error ending call:', err);
-            navigation.goBack(); // Still navigate back even if API call fails
+            navigation.replace('Home', {
+                currentUser: currentUser,
+                agoraEngineRef: agoraEngineRef
+            }); // Still navigate back even if API call fails
         }
     };
 

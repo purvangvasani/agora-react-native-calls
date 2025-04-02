@@ -53,7 +53,7 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({ navigation, route }) 
 
   const handleEndCall = async () => {
     try {
-      await fetch('http://localhost:3000/api/calls/end', {
+      await fetch('http://192.168.69.69:3000/api/calls/end', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
