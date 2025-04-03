@@ -41,7 +41,7 @@ const SelectUserScreen: React.FC<SelectUserScreenProps> = ({ navigation }) => {
         try {
             setLoading(true);
             setError(null);
-            const response = await fetch('http://192.168.69.69:3000/api/users');
+            const response = await fetch('http://192.168.10.221:3000/api/users');
 
             if (!response.ok) {
                 throw new Error('Failed to fetch users');

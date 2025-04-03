@@ -32,7 +32,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, route }) => {
   const [error, setError] = useState<string | null>(null);
   const [channelName, setChannelName] = useState<string>('testing');
   const [isCalling, setIsCalling] = useState(false);
-  const socket = io('http://192.168.69.69:3000'); // Replace with your server URL
+  const socket = io('http://192.168.10.221:3000'); // Replace with your server URL
   useEffect(() => {
 
     socket.on('connect', () => {
@@ -47,7 +47,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, route }) => {
 
     socket.on('incomingCall123', (data: any) => {
       console.log('Incoming call 123 from:', data, currentUser);
-      const {receiver, caller, channelName, agoraEngineRef, isVoiceCall, isVideoCall} = data;
+      const {receiver, caller, channelName, isVoiceCall, isVideoCall} = data;
       if(receiver.id === currentUser.id){
         // Alert.alert('Incoming call 123', `${receiver.name} is calling you`);
         navigation.navigate('IncomingCall', { caller: receiver, channelName, currentUser: caller, agoraEngineRef, isVoiceCall, isVideoCall });
@@ -68,7 +68,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, route }) => {
   useEffect(() => {
     const fetchContacts = async () => {
       try {
-        const response = await fetch('http://192.168.69.69:3000/api/users');
+        const response = await fetch('http://192.168.10.221:3000/api/users');
         if (!response.ok) {
           throw new Error('Failed to fetch contacts');
         }
@@ -134,7 +134,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ navigation, route }) => {
         agoraEngineRef.current?.muteAllRemoteAudioStreams(false);
       }
 
-      const response = await fetch('http://192.168.69.69:3000/api/calls', {
+      const response = await fetch('http://192.168.10.221:3000/api/calls', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

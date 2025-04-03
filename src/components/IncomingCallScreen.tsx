@@ -16,7 +16,21 @@ interface IncomingCallScreenProps {
 
 const IncomingCallScreen: React.FC<IncomingCallScreenProps> = ({ navigation, route }) => {
     const { caller, channelName, currentUser, agoraEngineRef } = route.params;
-    console.log('IncomingCallScreen', caller);
+    const handleAcceptCall = () => {
+        // Enable audio for the call
+        agoraEngineRef.current?.enableAudio();
+        agoraEngineRef.current?.enableLocalAudio(true);
+        agoraEngineRef.current?.muteLocalAudioStream(false);
+        agoraEngineRef.current?.muteAllRemoteAudioStreams(false);
+
+        // Navigate to the Call screen
+        navigation.navigate('Call', {
+            currentContact: currentUser,
+            channelName,
+            currentUser,
+            agoraEngineRef,
+        });
+    };
     return (
         <View style={styles.container}>
             <Text style={styles.title}>Incoming Call</Text>
@@ -29,14 +43,7 @@ const IncomingCallScreen: React.FC<IncomingCallScreenProps> = ({ navigation, rou
                     <Icon name="call-end" size={32} color="#fff" />
                     <Text style={styles.buttonText}>Decline</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.acceptButton} onPress={() =>
-                    navigation.navigate('Call', {
-                        currentContact: currentUser,
-                        channelName,
-                        currentUser,
-                        agoraEngineRef,
-                        // onEndCall: () => navigation.goBack(),
-                    })}>
+                <TouchableOpacity style={styles.acceptButton} onPress={handleAcceptCall}>
                     <Icon name="call" size={32} color="#fff" />
                     <Text style={styles.buttonText}>Accept</Text>
                 </TouchableOpacity>

@@ -62,7 +62,7 @@ const CallScreen: React.FC<CallScreenProps> = ({ navigation, route }) => {
     const handleEndCall = async () => {
         try {
             // Make API call to log call end
-            await fetch('http://192.168.69.69:3000/api/calls/end', {
+            await fetch('http://192.168.10.221:3000/api/calls/end', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
