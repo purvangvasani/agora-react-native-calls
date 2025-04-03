@@ -20,6 +20,7 @@ interface HomeScreenProps {
   startVideoCall: (contact: Contact) => void;
   joinCall: (contact: Contact) => void;
   isCalling: boolean;
+  users?: []
 }
 
 const dummyContacts: Contact[] = [
@@ -34,6 +35,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({
   startVideoCall,
   joinCall,
   isCalling,
+  users
 }) => {
   const renderContact = ({ item }: { item: Contact }) => (
     <View style={styles.contactItem}>
@@ -102,7 +104,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({
       </View>
       <Text style={styles.header}>Contacts</Text>
       <FlatList
-        data={dummyContacts}
+        data={users}
         renderItem={renderContact}
         keyExtractor={(item: Contact) => item.id.toString()}
         style={styles.list}

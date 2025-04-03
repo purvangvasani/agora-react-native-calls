@@ -10,6 +10,9 @@ import {
   PermissionsAndroid,
   Platform,
   TextInput,
+  Alert,
+  ActivityIndicator,
+  Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import {
@@ -26,10 +29,11 @@ import { Contact } from './src/types';
 import CallScreen from './src/components/CallScreen';
 import VideoCallScreen from './src/components/VideoCallScreen';
 import HomeScreen from './src/screens/HomeScreen';
+import io from 'socket.io-client';
 
 // Replace process.env variables with direct values
 const APP_ID = '9ea47ffa5d624be09aa43318b934a590';
-const APP_TOKEN = '007eJxTYFg+V7ci/pjxMzvH/plpBZr3dl9+XlhfKVOxUL795eo5khkKDJapiSbmaWmJpilmRiZJqQaWiYkmxsaGFkmWxiaJppYGM1VfpTcEMjK0rZvCxMgAgSA+O0NJanFJZl46AwMA7Aghng==';
+const APP_TOKEN = '007eJxTYKg1Kzh2vkN432tlo2yHLzcVao3v3Ii8orJEqf3O0r1HBRYqMFimJpqYp6UlmqaYGZkkpRpYJiaaGBsbWiRZGpskmloa+Bm9S28IZGTIKpzCysgAgSA+O0NJanFJZl46AwMAAhchmA==';
 const DEFAULT_CHANNEL_NAME = 'testing';
 
 const App: React.FC = () => {
@@ -41,19 +45,89 @@ const App: React.FC = () => {
   const agoraEngineRef = useRef<IRtcEngine>(null!);
   const [channelName, setChannelName] = useState<string>(DEFAULT_CHANNEL_NAME);
   const [isVideoCall, setIsVideoCall] = useState<boolean>(false);
+  const socket = io('http://192.168.10.221:3000');
+  const [users, setUsers] = useState<Contact[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<Contact | null>(null);
+  const [filteredUser, setFilteredUser] = useState<any | []>([]);
+  const [isUserSelected, setIsUserSelected] = useState<boolean>(false);
+  const [isPickerVisible, setPickerVisible] = useState(false);
 
   useEffect(() => {
+    socket.on('connect', () => {
+      console.log('Connected to WebSocket server');
+      fetchUsers();
+    });
+    socket.on('incomingCall123', async (data: any) => {
+      console.log('Incoming call 123 from:', data);
+      if (data?.receiver.id === selectedUser?.id) {
+        Alert.alert('INCOMING CALL')
+        joinCall(data?.caller)
+      }
+      // const {receiver, caller, channelName, isVoiceCall, isVideoCall} = data;
+
+      // if(receiver.id === currentUser.id){
+      //   // For voice calls, enable audio by default
+      //   if (isVoiceCall) {
+      //     await agoraEngineRef.current?.enableAudio();
+      //     await agoraEngineRef.current?.enableLocalAudio(true);
+      //     await agoraEngineRef.current?.muteLocalAudioStream(false);
+      //     await agoraEngineRef.current?.muteAllRemoteAudioStreams(false);
+      //   }
+
+      //   navigation.navigate('IncomingCall', { 
+      //     caller: receiver, 
+      //     channelName, 
+      //     currentUser: caller, 
+      //     agoraEngineRef, 
+      //     isVoiceCall, 
+      //     isVideoCall 
+      //   });
+      // }
+    });
+    socket.emit('send_message', 'Hello from client');
+
+    socket.on('disconnect', () => {
+      console.log('Disconnected from WebSocket server');
+    });
+
     if (!APP_ID) {
       console.error('Agora App ID is missing!');
       return;
     }
     setupVoiceSDKEngine();
     return () => {
+      socket.disconnect();
       if (agoraEngineRef.current) {
         agoraEngineRef.current.release();
       }
     };
   }, []);
+
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch('http://192.168.10.221:3000/api/users');
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch users');
+      }
+
+      const data = await response.json();
+      setUsers(data);
+      // if (data.length > 0) {
+      //   setSelectedUser(data[0]); // Select first user by default
+      //   handleUserSelect(selectedUser)
+      // }
+    } catch (err) {
+      console.error('Error fetching users:', err);
+      setError('Failed to load users. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const requestPermissions = async (): Promise<boolean> => {
     if (Platform.OS === 'android') {
@@ -93,7 +167,7 @@ const App: React.FC = () => {
 
       agoraEngineRef.current = createAgoraRtcEngine();
       const agoraEngine = agoraEngineRef.current;
-      
+
       agoraEngine.initialize({
         appId: APP_ID || '',
       });
@@ -169,8 +243,8 @@ const App: React.FC = () => {
     try {
       const agoraEngine = agoraEngineRef.current;
       if (agoraEngine && channelName) {
-        setCurrentContact(contact);
-        
+        // setCurrentContact(contact);
+
         agoraEngine.setChannelProfile(ChannelProfileType.ChannelProfileCommunication);
         agoraEngine.enableAudio();
         agoraEngine.enableLocalAudio(true);
@@ -194,6 +268,31 @@ const App: React.FC = () => {
 
   const startCall = async (contact: Contact): Promise<void> => {
     try {
+      // Log the call
+      const response = await fetch('http://192.168.10.221:3000/api/calls', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: contact.id,
+          name: contact.name,
+          number: contact.phone || contact?.number,
+          // actionType: actionType,
+          isVideoCall: false,
+          isVoiceCall: true,
+          channelName: channelName,
+          timestamp: new Date().toISOString(),
+          callerId: selectedUser?.id,
+          callerName: selectedUser?.name,
+          currentContact: contact,
+          currentUser: selectedUser,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to log call action');
+      }
       setCurrentContact(contact);
       const agoraEngine = agoraEngineRef.current;
 
@@ -207,6 +306,7 @@ const App: React.FC = () => {
             clientRoleType: ClientRoleType.ClientRoleBroadcaster,
           }
         );
+
       }
     } catch (e) {
       console.log('Call error:', e);
@@ -222,19 +322,19 @@ const App: React.FC = () => {
       setIsVideoCall(true);
 
       agoraEngine.setChannelProfile(ChannelProfileType.ChannelProfileCommunication);
-      
+
       // Enable video before joining
       agoraEngine.enableVideo();
       agoraEngine.enableLocalVideo(true);
       agoraEngine.startPreview();
-      
+
       await agoraEngine.joinChannel(
-          APP_TOKEN,
-          channelName,
-          contact.id,
-          {
-            clientRoleType: ClientRoleType.ClientRoleBroadcaster,
-          }
+        APP_TOKEN,
+        channelName,
+        contact.id,
+        {
+          clientRoleType: ClientRoleType.ClientRoleBroadcaster,
+        }
       );
     } catch (e) {
       console.log('Video call error:', e);
@@ -253,7 +353,7 @@ const App: React.FC = () => {
         agoraEngine.disableVideo();
       }
       await agoraEngine.leaveChannel();
-      
+
       setIsCalling(false);
       setIsVideoCall(false);
       setCurrentContact(null);
@@ -263,6 +363,31 @@ const App: React.FC = () => {
       console.log('End call error:', e);
     }
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#075e54" />
+          <Text style={styles.loadingText}>Loading users...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Icon name="error-outline" size={48} color="#ff4444" />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={fetchUsers}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (isCalling) {
     if (isVideoCall) {
@@ -289,17 +414,321 @@ const App: React.FC = () => {
     );
   }
 
+  const handleUserSelect = (user: Contact) => {
+    const filteredContacts = users.filter(
+      (contact: Contact) => contact.id !== user.id
+    );
+    setFilteredUser(filteredContacts)
+    console.log(filteredUser)
+    setSelectedUser(user);
+    setPickerVisible(false);
+  };
+
+  const handleSubmit = () => {
+    setIsUserSelected(true);
+    // if (selectedUser) {
+    //   navigation.replace('Home', {
+    //     currentUser: selectedUser,
+    //     agoraEngineRef: agoraEngineRef
+    //   });
+    // }
+  };
+
+  const renderUserItem = ({ item }: { item: Contact }) => (
+    <TouchableOpacity
+      style={[
+        styles.userItem,
+        selectedUser?.id === item.id && styles.selectedUserItem
+      ]}
+      onPress={() => handleUserSelect(item)}
+    >
+      <View style={styles.userAvatar}>
+        <Text style={styles.avatarText}>{item.name[0].toUpperCase()}</Text>
+      </View>
+      <View style={styles.userInfo}>
+        <Text style={styles.userName}>{item.name}</Text>
+        <Text style={styles.userPhone}>{item.phone}</Text>
+      </View>
+      {selectedUser?.id === item.id && (
+        <Icon name="check-circle" size={24} color="#075e54" />
+      )}
+    </TouchableOpacity>
+  );
+  console.warn(users, selectedUser)
   return (
-    <HomeScreen
-      channelName={channelName}
-      setChannelName={setChannelName}
-      agoraEngineRef={agoraEngineRef}
-      startCall={startCall}
-      startVideoCall={startVideoCall}
-      joinCall={joinCall}
-      isCalling={isCalling}
-    />
+    <>
+      {!isUserSelected &&
+        <SafeAreaView style={styles.container}>
+          <View style={styles.content}>
+            <Text style={styles.title}>Select Your Profile</Text>
+            <Text style={styles.subtitle}>Choose your user account for this device</Text>
+
+            <TouchableOpacity
+              style={styles.pickerButton}
+              onPress={() => setPickerVisible(true)}
+            >
+              {selectedUser ? (
+                <View style={styles.selectedUserContainer}>
+                  <View style={styles.selectedUserAvatar}>
+                    <Text style={styles.selectedAvatarText}>
+                      {selectedUser.name[0].toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={styles.selectedUserInfo}>
+                    <Text style={styles.selectedUserName}>{selectedUser.name}</Text>
+                    <Text style={styles.selectedUserPhone}>{selectedUser.phone}</Text>
+                  </View>
+                  <Icon name="arrow-drop-down" size={24} color="#075e54" />
+                </View>
+              ) : (
+                <Text style={styles.placeholderText}>Select a user</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.submitButton,
+                !selectedUser && styles.submitButtonDisabled
+              ]}
+              onPress={handleSubmit}
+              disabled={!selectedUser}
+            >
+              <Text style={styles.submitButtonText}>Continue</Text>
+            </TouchableOpacity>
+
+
+            <Modal
+              visible={isPickerVisible}
+              animationType="slide"
+              transparent={true}
+              onRequestClose={() => setPickerVisible(false)}
+            >
+              <View style={styles.modalContainer}>
+                <View style={styles.modalContent}>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>Select User</Text>
+                    <TouchableOpacity
+                      onPress={() => setPickerVisible(false)}
+                      style={styles.closeButton}
+                    >
+                      <Icon name="close" size={24} color="#666" />
+                    </TouchableOpacity>
+                  </View>
+                  <FlatList
+                    data={users}
+                    renderItem={renderUserItem}
+                    keyExtractor={(item) => item.id.toString()}
+                    ItemSeparatorComponent={() => <View style={styles.separator} />}
+                    contentContainerStyle={styles.listContent}
+                  />
+                </View>
+              </View>
+            </Modal>
+          </View>
+        </SafeAreaView>
+      }
+      {isUserSelected &&
+        <HomeScreen
+          channelName={channelName}
+          setChannelName={setChannelName}
+          agoraEngineRef={agoraEngineRef}
+          startCall={startCall}
+          startVideoCall={startVideoCall}
+          joinCall={joinCall}
+          isCalling={isCalling}
+          users={filteredUser}
+        />}
+    </>
   );
 };
 
 export default App;
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    color: '#ff4444',
+    fontSize: 16,
+    textAlign: 'center',
+    marginVertical: 16,
+  },
+  retryButton: {
+    backgroundColor: '#075e54',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  content: {
+    flex: 1,
+    padding: 20,
+    justifyContent: 'center',
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#075e54',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  pickerButton: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 32,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  selectedUserContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  selectedUserAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#075e54',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  selectedAvatarText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  selectedUserInfo: {
+    flex: 1,
+  },
+  selectedUserName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+  },
+  selectedUserPhone: {
+    fontSize: 14,
+    color: '#666',
+  },
+  placeholderText: {
+    color: '#999',
+    fontSize: 16,
+  },
+  submitButton: {
+    backgroundColor: '#075e54',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#cccccc',
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  listContent: {
+    padding: 16,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#eee',
+    marginVertical: 8,
+  },
+  userItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+  },
+  selectedUserItem: {
+    backgroundColor: '#e8f5e9',
+  },
+  userAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#075e54',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  avatarText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  userInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#000',
+  },
+  userPhone: {
+    fontSize: 14,
+    color: '#666',
+  },
+});
