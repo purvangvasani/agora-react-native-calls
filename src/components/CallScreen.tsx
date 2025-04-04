@@ -31,7 +31,7 @@ const CallScreen: React.FC<CallScreenProps> = ({
 }) => {
     const [duration, setDuration] = useState<number>(0);
     const [isMuted, setIsMuted] = useState<boolean>(false);
-    const [isSpeakerOn, setIsSpeakerOn] = useState<boolean>(true);
+    const [isSpeakerOn, setIsSpeakerOn] = useState<boolean>(false);
     const [pulseAnim] = useState(new Animated.Value(1));
 
     useEffect(() => {
