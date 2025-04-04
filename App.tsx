@@ -73,7 +73,11 @@ const App: React.FC = () => {
       console.log('Incoming call 123 from:', data, currentContact, selectedUserRef.current);
       if (data?.receiver.id === selectedUserRef.current?.id) {
         Alert.alert('INCOMING CALL')
-        joinCall(data?.caller)
+        if (data?.isVoiceCall){
+          joinCall(data?.caller)
+        } else {
+          joinVideoCall(data?.caller)
+        }
       }
     });
 
@@ -312,10 +316,65 @@ const App: React.FC = () => {
 
   const startVideoCall = async (contact: Contact): Promise<void> => {
     try {
+      // Log the call
+      const response = await fetch('http://192.168.10.221:3000/api/calls', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: contact.id,
+          name: contact.name,
+          number: contact.phone || contact?.number,
+          // actionType: actionType,
+          isVideoCall: true,
+          isVoiceCall: false,
+          channelName: channelName,
+          timestamp: new Date().toISOString(),
+          callerId: selectedUser?.id,
+          callerName: selectedUser?.name,
+          currentContact: contact,
+          currentUser: selectedUser,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to log call action');
+      }
+      setCurrentContact(contact);
       const agoraEngine = agoraEngineRef.current;
       if (!agoraEngine) return;
 
       setCurrentContact(contact);
+      setIsVideoCall(true);
+
+      agoraEngine.setChannelProfile(ChannelProfileType.ChannelProfileCommunication);
+
+      // Enable video before joining
+      agoraEngine.enableVideo();
+      agoraEngine.enableLocalVideo(true);
+      agoraEngine.startPreview();
+
+      await agoraEngine.joinChannel(
+        APP_TOKEN,
+        channelName,
+        contact.id,
+        {
+          clientRoleType: ClientRoleType.ClientRoleBroadcaster,
+        }
+      );
+    } catch (e) {
+      console.log('Video call error:', e);
+      setIsVideoCall(false);
+      setCurrentContact(null);
+    }
+  };
+
+  const joinVideoCall = async (contact: Contact): Promise<void> => {
+    try {
+      const agoraEngine = agoraEngineRef.current;
+      if (!agoraEngine) return;
+
       setIsVideoCall(true);
 
       agoraEngine.setChannelProfile(ChannelProfileType.ChannelProfileCommunication);
