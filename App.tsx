@@ -33,7 +33,7 @@ import io from 'socket.io-client';
 
 // Replace process.env variables with direct values
 const APP_ID = '9ea47ffa5d624be09aa43318b934a590';
-const APP_TOKEN = '007eJxTYKg1Kzh2vkN432tlo2yHLzcVao3v3Ii8orJEqf3O0r1HBRYqMFimJpqYp6UlmqaYGZkkpRpYJiaaGBsbWiRZGpskmloa+Bm9S28IZGTIKpzCysgAgSA+O0NJanFJZl46AwMAAhchmA==';
+const APP_TOKEN = '007eJxTYHhSP0v44LrAUAWZe3UrWTU/P2aR7LV2fHdzb3vb4SCZXlkFBsvURBPztLRE0xQzI5OkVAPLxEQTY2NDiyRLY5NEU0uDCRHv0xsCGRmm5a5gZGSAQBCfnaEktbgkMy+dgQEAliwglg==';
 const DEFAULT_CHANNEL_NAME = 'testing';
 
 const App: React.FC = () => {
@@ -43,6 +43,7 @@ const App: React.FC = () => {
   const [joinedUsers, setJoinedUsers] = useState<number[]>([]);
   const [speakingUsers, setSpeakingUsers] = useState<{ [key: number]: number }>({});
   const agoraEngineRef = useRef<IRtcEngine>(null!);
+  const selectedUserRef = useRef<Contact | null>(null);
   const [channelName, setChannelName] = useState<string>(DEFAULT_CHANNEL_NAME);
   const [isVideoCall, setIsVideoCall] = useState<boolean>(false);
   const socket = io('http://192.168.10.221:3000');
@@ -55,37 +56,27 @@ const App: React.FC = () => {
   const [isPickerVisible, setPickerVisible] = useState(false);
 
   useEffect(() => {
+    selectedUserRef.current = selectedUser;
+  }, [selectedUser]);
+
+  useEffect(() => {
     socket.on('connect', () => {
       console.log('Connected to WebSocket server');
       fetchUsers();
     });
+    
+    // Remove the existing socket listener if it exists
+    socket.off('incomingCall123');
+    
+    // Add the new listener with access to the latest selectedUser via ref
     socket.on('incomingCall123', async (data: any) => {
-      console.log('Incoming call 123 from:', data);
-      if (data?.receiver.id === selectedUser?.id) {
+      console.log('Incoming call 123 from:', data, currentContact, selectedUserRef.current);
+      if (data?.receiver.id === selectedUserRef.current?.id) {
         Alert.alert('INCOMING CALL')
         joinCall(data?.caller)
       }
-      // const {receiver, caller, channelName, isVoiceCall, isVideoCall} = data;
-
-      // if(receiver.id === currentUser.id){
-      //   // For voice calls, enable audio by default
-      //   if (isVoiceCall) {
-      //     await agoraEngineRef.current?.enableAudio();
-      //     await agoraEngineRef.current?.enableLocalAudio(true);
-      //     await agoraEngineRef.current?.muteLocalAudioStream(false);
-      //     await agoraEngineRef.current?.muteAllRemoteAudioStreams(false);
-      //   }
-
-      //   navigation.navigate('IncomingCall', { 
-      //     caller: receiver, 
-      //     channelName, 
-      //     currentUser: caller, 
-      //     agoraEngineRef, 
-      //     isVoiceCall, 
-      //     isVideoCall 
-      //   });
-      // }
     });
+
     socket.emit('send_message', 'Hello from client');
 
     socket.on('disconnect', () => {
@@ -117,10 +108,13 @@ const App: React.FC = () => {
 
       const data = await response.json();
       setUsers(data);
-      // if (data.length > 0) {
-      //   setSelectedUser(data[0]); // Select first user by default
-      //   handleUserSelect(selectedUser)
-      // }
+      if (data.length > 0 && !selectedUser) {
+        setSelectedUser(data[0]);
+        const filteredContacts = data.filter(
+          (contact: Contact) => contact.id !== data[0].id
+        );
+        setFilteredUser(filteredContacts);
+      }
     } catch (err) {
       console.error('Error fetching users:', err);
       setError('Failed to load users. Please try again.');
@@ -266,8 +260,11 @@ const App: React.FC = () => {
     }
   };
 
-  const startCall = async (contact: Contact): Promise<void> => {
+  const startCall = async (contact: Contact, current: any): Promise<void> => {
     try {
+      if (!selectedUser?.name) {
+        setSelectedUser(current)
+      }
       // Log the call
       const response = await fetch('http://192.168.10.221:3000/api/calls', {
         method: 'POST',
@@ -415,12 +412,11 @@ const App: React.FC = () => {
   }
 
   const handleUserSelect = (user: Contact) => {
+    setSelectedUser(user);
     const filteredContacts = users.filter(
       (contact: Contact) => contact.id !== user.id
     );
     setFilteredUser(filteredContacts)
-    console.log(filteredUser)
-    setSelectedUser(user);
     setPickerVisible(false);
   };
 
@@ -454,7 +450,7 @@ const App: React.FC = () => {
       )}
     </TouchableOpacity>
   );
-  console.warn(users, selectedUser)
+  // console.warn(users, selectedUser)
   return (
     <>
       {!isUserSelected &&
@@ -536,6 +532,7 @@ const App: React.FC = () => {
           joinCall={joinCall}
           isCalling={isCalling}
           users={filteredUser}
+          selectedUser={selectedUser}
         />}
     </>
   );

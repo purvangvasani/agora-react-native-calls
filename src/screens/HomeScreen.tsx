@@ -16,11 +16,12 @@ interface HomeScreenProps {
   channelName: string;
   setChannelName: (name: string) => void;
   agoraEngineRef: React.RefObject<IRtcEngine>;
-  startCall: (contact: Contact) => void;
+  startCall: (contact: Contact, current?: Contact | null | undefined) => void;
   startVideoCall: (contact: Contact) => void;
   joinCall: (contact: Contact) => void;
   isCalling: boolean;
-  users?: []
+  users?: [],
+  selectedUser?: Contact | null
 }
 
 const dummyContacts: Contact[] = [
@@ -35,7 +36,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({
   startVideoCall,
   joinCall,
   isCalling,
-  users
+  users,
+  selectedUser
 }) => {
   const renderContact = ({ item }: { item: Contact }) => (
     <View style={styles.contactItem}>
@@ -50,7 +52,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({
             agoraEngineRef.current?.enableLocalAudio(true);
             agoraEngineRef.current?.muteLocalAudioStream(false);
             agoraEngineRef.current?.muteAllRemoteAudioStreams(false);
-            startCall(item);
+            startCall(item, selectedUser);
           }}
           disabled={isCalling}
           style={[styles.callButton, styles.audioCallButton]}
@@ -70,7 +72,7 @@ const HomeScreen: React.FC<HomeScreenProps> = ({
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.inputContainer}>
+      {/* <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
           placeholder="Enter Channel Name"
@@ -101,8 +103,8 @@ const HomeScreen: React.FC<HomeScreenProps> = ({
             <Text style={styles.joinButtonText}>Join Video</Text>
           </TouchableOpacity>
         </View>
-      </View>
-      <Text style={styles.header}>Contacts</Text>
+      </View> */}
+      <Text style={styles.header}>Contacts of {selectedUser?.name}</Text>
       <FlatList
         data={users}
         renderItem={renderContact}
